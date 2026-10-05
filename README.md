@@ -22,11 +22,30 @@ camofox-browser 已经把引擎服务化，并且定义了 11 个工具的权威
 2. **托管服务生命周期** —— 懒启动 + 卸载回收，DSH 启动时不常驻浏览器服务；
 3. **接管两类 DSH 语义的收尾** —— 截图落盘而不是塞进上下文、失败时把服务日志一起带出来。
 
-## 前置条件
+## 安装
 
-两样，缺一不可。
+### 一键（推荐）
 
-**1. camofox-browser 本体**
+```powershell
+git clone https://github.com/lemonhall/dsh-camofox-browser E:\development\dsh-camofox-browser
+cd E:\development\dsh-camofox-browser
+.\install.ps1 -Proxy http://127.0.0.1:7897
+```
+
+`install.ps1` 是**幂等**的，依次做六件事：检查 Node ≥ 22 → clone camofox-browser → 装依赖（跳过会触发 node-gyp 编译的 `better-sqlite3`）→ 下载 Camoufox 引擎（约 500MB）→ 注册 DSH 插件 → 跑自测。
+
+| 参数 | 用途 |
+|---|---|
+| `-Proxy http://127.0.0.1:7897` | 下载引擎走代理（国内基本必填） |
+| `-SkipEngine` | 后端已装好、只想注册插件 |
+| `-SkipPlugin` | 只装后端，不碰 DSH |
+| `-ServerDir <路径>` | 换后端落地目录 |
+
+### 手动安装
+
+四步。每一步都有坑，坑写在对应位置。
+
+**第 1 步：camofox-browser 本体**
 
 ```powershell
 git clone https://github.com/jo-inc/camofox-browser E:\development\camofox-browser
@@ -38,7 +57,7 @@ npm install --omit=dev --ignore-scripts
 >
 > 如果你已经撞上 node-gyp 报错 —— 那是这条依赖的锅，不是你的环境。
 
-**2. Camoufox 引擎（约 500MB）**
+**第 2 步：Camoufox 引擎（约 500MB）**
 
 ```powershell
 cd E:\development\camofox-browser
@@ -51,13 +70,21 @@ node lib/camoufox-download.js
 >
 > 引擎默认装到 `%LOCALAPPDATA%\camoufox\camoufox\Cache`。**建议就用默认位置**：它的安装目录变量是 `CAMOUFOX_INSTALL_DIR`（带 U），和 camofox-browser 自己的 `CAMOFOX_` 前缀不是一套 —— 一旦漏设，camoufox-js 会当作「没装」然后**静默重下 500MB**。
 
-## 安装
+**第 3 步：注册 DSH 插件**
 
 ```powershell
 dsh plugin --profile desktop add link:E:\development\dsh-camofox-browser
 ```
 
-装完宿主半边**热生效**，本会话工具表立刻多出 `camofox`。
+装完宿主半边**热生效**，本会话工具表立刻多出 `camofox`，不用重启应用。
+
+**第 4 步：验证**
+
+```
+camofox {action:"open", url:"https://example.com"}
+```
+
+首次调用会顺带把后端服务拉起来（冷启动 3-8 秒）。返回 `tabId` 就是通了。
 
 ## 工具
 
