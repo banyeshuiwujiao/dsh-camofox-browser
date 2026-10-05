@@ -1,0 +1,43 @@
+{
+  "name": "dsh-camofox-browser",
+  "version": "0.1.0",
+  "description": "Camoufox anti-detection browser as native DSH tools — a single action-based tool that drives camofox-browser (C++ level fingerprint spoofing) and manages the backend service for you.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "camoufox",
+    "camofox",
+    "anti-detection",
+    "browser",
+    "agent"
+  ],
+  "meta": {
+    "title": "Camofox 反检测浏览器",
+    "description": "宿主侧注册 camofox 工具：驱动 camofox-browser 的 REST 服务（Camoufox 引擎，C++ 层指纹伪装），并按需拉起/回收该服务。截图落盘不进上下文。"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
