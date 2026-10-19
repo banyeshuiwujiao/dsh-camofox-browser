@@ -122,9 +122,17 @@ check('每个搜索宏都能被 navigate 接受', () => {
 
 console.log('shapeResult')
 
-check('text 结果把标题和 URL 顶在前面', () => {
-  const out = shapeResult('text', { title: 'T', url: 'https://u', text: 'body' }, opts)
-  assert.match(out, /^标题：T\nURL：https:\/\/u\n\nbody$/)
+check('text 结果把标题和 URL 顶在前面（支持扁平结构与 evaluate 包装的 result 结构）', () => {
+  const flat = shapeResult('text', { title: 'T', url: 'https://u', text: 'body' }, opts)
+  assert.match(flat, /^标题：T\nURL：https:\/\/u\n\nbody$/)
+  const wrapped = shapeResult('text', { ok: true, result: { title: 'T', url: 'https://u', text: 'body' } }, opts)
+  assert.match(wrapped, /^标题：T\nURL：https:\/\/u\n\nbody$/)
+})
+
+check('transcript 错误响应能够格式化并提示排障建议', () => {
+  const errOut = shapeResult('transcript', { status: 'error', code: 403, message: 'Sign in to confirm you’re not a bot', video_url: 'https://youtu.be/x' }, opts)
+  assert.match(errOut, /YouTube 字幕提取失败: 403/)
+  assert.match(errOut, /排障建议/)
 })
 
 check('snapshot 的 hasMore 会提示 offset', () => {

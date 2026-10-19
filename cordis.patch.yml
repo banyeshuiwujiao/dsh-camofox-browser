@@ -28,7 +28,7 @@
         # camofox-browser 的 REST 地址（服务默认监听 9377）。
         baseUrl: 'http://127.0.0.1:9377'
         # camofox-browser 源码目录（里面要有 server.js）。
-        serverDir: 'E:\development\camofox-browser'
+        serverDir: 'C:\Users\Admin\DeepSeek_Harness\dsh-client-config\plugins\camofox-browser'
         # Camoufox 引擎目录。留空 = 用 camoufox-js 默认位置
         # （%LOCALAPPDATA%\camoufox\camoufox\Cache）。注意变量名是 CAMOUFOX_INSTALL_DIR
         # （含 U）；写成 CAMOFOX_INSTALL_DIR 不报错，但会被当作「没装」并静默重下 500MB。
@@ -45,7 +45,7 @@
         startTimeoutMs: 120000
         requestTimeoutMs: 90000
         # 截图落盘目录；空则落到 DSH 会话工作区（一次性草稿）。
-        screenshotDir: 'E:\development\dsh-camofox-browser\shots'
+        screenshotDir: 'C:\Users\Admin\DeepSeek_Harness\dsh-client-config\plugins\dsh-camofox-browser\shots'
         # 单次返回给模型的文本上限，防止一次快照吃满上下文。
         maxChars: 40000
         # 浏览器代理。默认关闭：直连时 Camoufox 不声明地理位置，身份更中性。
