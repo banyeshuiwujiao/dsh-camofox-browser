@@ -28,7 +28,7 @@
         # camofox-browser 的 REST 地址（服务默认监听 9377）。
         baseUrl: 'http://127.0.0.1:9377'
         # camofox-browser 源码目录（里面要有 server.js）。
-        serverDir: 'C:\Users\Admin\DeepSeek_Harness\camofox-browser'
+        serverDir: 'C:\Users\Admin\DeepSeek_Harness\git-repo\camofox-browser'
         # Camoufox 引擎目录。留空 = 用 camoufox-js 默认位置
         # （%LOCALAPPDATA%\camoufox\camoufox\Cache）。注意变量名是 CAMOUFOX_INSTALL_DIR
         # （含 U）；写成 CAMOFOX_INSTALL_DIR 不报错，但会被当作「没装」并静默重下 500MB。
