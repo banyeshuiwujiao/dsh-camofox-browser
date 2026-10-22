@@ -4,6 +4,15 @@
 # 宿主半边（lib/index.js）注册一个工具 `camofox`，并把 camofox-browser 的
 # REST 服务当成它的后端：第一次调用时懒启动，插件卸载时回收。
 #
+# 这一行 insert 就是「启用」本身：本包被列进 profile 的 dsh.profile.bundles 时，
+# 它才会被应用。开关因此归插件清单（package.json 的 bundles），
+# 不再由 profile patch 的 insert 负责 —— profile 那份现在只做 config 覆盖。
+#
+# ⚠️ 覆盖是整块替换，不是逐键合并（@deepseek-ai/dsh-app-boot 的
+# `applyEntryPatches` 对非 insert 行走 `target[key] = value`）。所以 profile 里
+# 只要写 `- id: dsh-camofox-browser` + `config:`，就得把**全部**键重列一遍，
+# 漏掉的键会退回本文件的值。本文件因此保持一份完整、可移植的默认配置。
+#
 # 前置条件（两样，缺一不可）：
 #   1. camofox-browser 源码 + 依赖：
 #        git clone https://github.com/jo-inc/camofox-browser
@@ -11,14 +20,14 @@
 #      （Windows 上 better-sqlite3 会尝试编译；它只被单元测试引用，
 #        `npm install --ignore-scripts` 即可跳过，服务不受影响。）
 #   2. Camoufox 引擎（约 500MB）下载到 installDir：
-#        $env:CAMOFOX_INSTALL_DIR='E:\caches\camoufox'
+#        $env:CAMOUFOX_INSTALL_DIR='<你的引擎目录>'
 #        node lib/camoufox-download.js      # 需能访问 GitHub（国内走代理）
 #
 # 本插件没有导出 Cordis Config schema，所以这里的 config 会整块原样交给
 # apply(ctx, config)（@deepseek-ai/cordis: `if (!runtime.Config) return config;`）。
 #
-# 安装：
-#   dsh plugin --profile desktop add link:E:\development\dsh-camofox-browser
+# 安装（启用 = 装成依赖 + 进 bundles）：
+#   dsh plugin --profile <name> add link:<本包绝对路径>
 # ============================================================================
 
 - insert:
@@ -27,14 +36,17 @@
       config:
         # camofox-browser 的 REST 地址（服务默认监听 9377）。
         baseUrl: 'http://127.0.0.1:9377'
-        # camofox-browser 源码目录（里面要有 server.js）。
-        serverDir: 'C:\Users\Admin\DeepSeek_Harness\git-repo\camofox-browser'
+        # camofox-browser 源码目录（里面要有 server.js）。必填：没有合理默认值，
+        # 留空会让第一次调用直接报「找不到 camofox-browser 服务」而不是去猜某个
+        # 作者机器上的绝对路径。
+        serverDir: ''
         # Camoufox 引擎目录。留空 = 用 camoufox-js 默认位置
         # （%LOCALAPPDATA%\camoufox\camoufox\Cache）。注意变量名是 CAMOUFOX_INSTALL_DIR
         # （含 U）；写成 CAMOFOX_INSTALL_DIR 不报错，但会被当作「没装」并静默重下 500MB。
         installDir: ''
-        # 引擎解压前的临时目录（默认 os.tmpdir()，峰值约 600MB，故挪到 E 盘）。
-        tempDir: 'E:\caches\tmp'
+        # 引擎解压前的临时目录。留空 = os.tmpdir()；解压峰值约 600MB，
+        # C 盘紧张就该在 profile 的 config 里指到别的盘。
+        tempDir: ''
         # 留空则用 DSH 自己的 node（process.execPath）。
         nodePath: ''
         # 会话所有者：决定 cookie / localStorage 的分区与持久化目录。
@@ -45,7 +57,7 @@
         startTimeoutMs: 120000
         requestTimeoutMs: 90000
         # 截图落盘目录；空则落到 DSH 会话工作区（一次性草稿）。
-        screenshotDir: 'C:\Users\Admin\DeepSeek_Harness\dsh-client-config\plugins\dsh-camofox-browser\shots'
+        screenshotDir: ''
         # 单次返回给模型的文本上限，防止一次快照吃满上下文。
         maxChars: 40000
         # 浏览器代理。默认关闭：直连时 Camoufox 不声明地理位置，身份更中性。
