@@ -88,16 +88,16 @@ camofox {action:"open", url:"https://example.com"}
 
 ## 工具
 
-单个工具 `camofox`，**21 个 action**：
+单个工具 `camofox`，**26 个 action**：
 
 | action | 作用 |
 |---|---|
 | `open` | 开标签页，返回 `tabId`（可传 `pin:true` 锁定防回收） |
 | `snapshot` | 可交互元素树，元素带 `e1`/`e2` 引用（大页面用 `offset` 分页；被 maxChars 截断时给出按实际展示量算的续读偏移，不会跳丢内容） |
 | `text` | **取正文纯文本** —— 读文章、查资料最省 token |
-| `click` / `type` / `press` | 用 `ref`（如 `e1`）或 `selector` 交互 |
+| `click` / `type` / `press` | 用 `ref`（如 `e1`）或 `selector` 交互；三者执行后**自动探测新标签页并追加提醒**（含 tabId/URL/标题） |
 | `navigate` | 跳 URL，或用搜索宏（`@google_search` 等 14 个） |
-| `scroll` | 滚动 |
+| `scroll` | 滚动（注入原生 `window.scrollBy`，不等 networkidle；可用 `timeoutMs` 控预算，默认 5000ms） |
 | `screenshot` | 截图**存盘**并返回路径（不进上下文；`screenshotDir` 留空自动回退 `<cwd>/.camofox-shots`，不再抛 ENOENT） |
 | `links` / `evaluate` | 取页面链接 / 在页面里执行 JS |
 | `tabs` / `close` / `reset` | 列出 / 关闭标签页；清空会话（cookie + localStorage） |
@@ -105,7 +105,12 @@ camofox {action:"open", url:"https://example.com"}
 | `pin` | 锁定/解锁标签页（免疫空闲回收）；后端无该路由时返回可读错误而非整页 HTML |
 | `status` | **查服务健康度、后端能力**（pin / yt-dlp / interactive 模式）与托管归属 |
 | `wait` | 等页面网络空闲（SPA 水合首选，替代反复 evaluate 轮询） |
-| `refresh` / `back` / `forward` | 刷新 / 后退 / 前进 |
+| `refresh` / `back` / `forward` | 刷新 / 后退 / 前进（`refresh` 等 `domcontentloaded`，中断时自动降级 `location.reload()`） |
+| `upload` | 上传文件到页面 `<input type="file">`（支持 `ref`/`selector`/自动探测已有输入框）；文件须位于 `~/.camofox/uploads`，目录缺失会自动创建 |
+| `console` | 取控制台日志与页面未捕获错误（`types` 过滤级别，`clear` 读后清空） |
+| `network` | 查网络 HTTP 请求与响应（`resourceTypes` / `status` 过滤，`clear` 读后清空） |
+| `set_cookies` | **直接注入 Cookies**（对象数组或 `"a=1; b=2"` + `domain`），免扫码/免短信登录 |
+| `trace` | **动作级监听**：`subAction` 执行前后自动清空并截获该动作触发的 XHR/fetch 与控制台日志，一次调用拿三段结果 |
 
 典型流程：
 
@@ -165,6 +170,10 @@ camofox {action:"text", tabId:"..."}                    → 正文
 - **冷启动首个 `open` 偶发 500**（已缓解）：浏览器 pre-warm 未完成时后端会回 500。插件对建标签类 500 自动退避重试一次。
 - **`pin` 依赖后端支持**：`/tabs/:id/pin` 是 fork 新增路由；上游原版无此路由，`pin` 会 404（`status` 的 pin 能力探测可提前发现）。
 - **YouTube 字幕快路径**：yt-dlp 装在非 PATH 目录（如 `E:\Program Files\yt-dlp\`）时，后端探测不到会一直走浏览器兜底；配 `ytDlpPath` 并在插件托管模式下重启服务后生效。
+- **`scroll` / `refresh` 曾在视频页硬吃 30s 超时**（已修）：B 站/YouTube 这类页面永远有分片与 WebSocket，驱动层等 networkidle 必然超时。后端现在把滚动改为页面内注入原生 `window.scrollBy({behavior:'instant'})`（不等网络/重绘，实测约 113ms 返回），刷新改为等 `domcontentloaded` 并在 `NS_BINDING_ABORTED` 时降级 `location.reload()`；两者都可用 `timeoutMs` 控制预算。
+- **`upload` 曾因目录缺失直接失败**（已优化）：后端现在会自动 `mkdir -p` 建好上传目录；越界路径的报错也会回显期望目录（`Expected path inside: ...`），不再只有一句 `Upload directory is not available`。
+- **新标签页曾静默跳出**（已缓解）：国内站点搜索/点击普遍 `target="_blank"`，新页异步注册、当次查询常查不到。插件现在在 `click`/`type`/`press` 后轮询约 1 秒（命中即止），发现新标签页就追加提醒（tabId/URL/标题）。
+- **新增 `set_cookies` / `trace`**：前者直接注入凭据免扫码登录（对象数组或 `"a=1; b=2"` + `domain`，单次上限 500 条）；后者一键抓「某动作触发了哪些 XHR 与控制台日志」，取代「clear → 点击 → 查询」三步。
 
 ## License
 

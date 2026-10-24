@@ -282,6 +282,25 @@ check('超长结果被截断', () => {
   assert.match(out, /已截断/)
 })
 
+check('set_cookies 支持数组和分号字符串格式', () => {
+  const fromStr = buildCall({ action: 'set_cookies', cookies: 'a=1; b=2', domain: '.example.com' }, opts)
+  assert.equal(fromStr.method, 'POST')
+  assert.equal(fromStr.path, '/sessions/u1/cookies')
+  assert.deepEqual(fromStr.body.cookies, [
+    { name: 'a', value: '1', domain: '.example.com', path: '/' },
+    { name: 'b', value: '2', domain: '.example.com', path: '/' },
+  ])
+  const fromArr = buildCall({ action: 'set_cookies', cookies: [{ name: 'x', value: 'y', domain: '.a.b' }] }, opts)
+  assert.deepEqual(fromArr.body.cookies, [{ name: 'x', value: 'y', domain: '.a.b' }])
+})
+
+check('trace 接受 subAction 且需要 tabId', () => {
+  const traceCall = buildCall({ action: 'trace', tabId: 't1', subAction: 'click', ref: 'e1' }, opts)
+  assert.equal(traceCall.action, 'trace')
+  assert.equal(traceCall.kind, 'composite')
+  assert.throws(() => buildCall({ action: 'trace', tabId: 't1' }, opts), /需要 subAction/)
+})
+
 check('null 响应不炸', () => {
   assert.equal(shapeResult('text', null, opts), '(空响应)')
 })
