@@ -131,14 +131,18 @@ check('console 打到 /tabs/:tabId/console 并支持参数', () => {
   assert.match(call.path, /types=error%2Cwarn/)
   assert.match(call.path, /limit=50/)
   assert.match(call.path, /clear=true/)
+
+  const callStr = buildCall({ action: 'console', tabId: 't1', clear: 'true' }, opts)
+  assert.match(callStr.path, /clear=true/)
 })
 
 check('network 打到 /tabs/:tabId/network 并支持参数', () => {
-  const call = buildCall({ action: 'network', tabId: 't1', resourceTypes: 'fetch,xhr', status: 'failed' }, opts)
+  const call = buildCall({ action: 'network', tabId: 't1', resourceTypes: 'fetch,xhr', status: 'failed', clear: true }, opts)
   assert.equal(call.method, 'GET')
   assert.match(call.path, /^\/tabs\/t1\/network\?/)
   assert.match(call.path, /resourceTypes=fetch%2Cxhr/)
   assert.match(call.path, /status=failed/)
+  assert.match(call.path, /clear=true/)
 })
 
 check('需要 tabId 的 action 缺 tabId 就报错', () => {
@@ -256,6 +260,20 @@ check('formatStatus 在脱机/未运行时正确报告未运行 (S1)', () => {
   const out = formatStatus(health, caps)
   assert.match(out, /服务：未运行/)
   assert.match(out, /服务未连接或未就绪/)
+})
+
+check('upload/console/network 结果被友好格式化', () => {
+  const up = shapeResult('upload', { ok: true, attached: ['/data/a.png'], via: 'panel_input' }, opts)
+  assert.match(up, /文件上传成功/)
+  assert.match(up, /panel_input/)
+
+  const cons = shapeResult('console', { total: 1, count: 1, logs: [{ type: 'warn', text: 'deprecated api', timestamp: 1700000000000 }] }, opts)
+  assert.match(cons, /控制台日志/)
+  assert.match(cons, /\[WARN\] deprecated api/)
+
+  const net = shapeResult('network', { total: 1, count: 1, requests: [{ method: 'POST', url: 'https://x.com/api', status: 200, durationMs: 45 }] }, opts)
+  assert.match(net, /网络请求/)
+  assert.match(net, /\[POST\] https:\/\/x\.com\/api -> 200 \(45ms\)/)
 })
 
 check('超长结果被截断', () => {
