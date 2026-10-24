@@ -123,12 +123,12 @@ camofox {action:"text", tabId:"..."}                    → 正文
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `baseUrl` | `http://127.0.0.1:9377` | 后端地址 |
-| `serverDir` | `E:\development\camofox-browser` | 源码目录（要有 `server.js`） |
+| `serverDir` | 空 | 源码目录（要有 `server.js`，必填：在 profile 配置里指定） |
 | `installDir` | 空 | Camoufox 引擎目录；空 = 用默认位置（**推荐留空**） |
-| `tempDir` | `E:\caches\tmp` | 引擎解压的临时目录（默认会占 C 盘约 600MB 峰值） |
+| `tempDir` | 空 | 引擎解压的临时目录；留空 = `os.tmpdir()` |
 | `userId` | `dsh` | 会话所有者，决定 cookie/localStorage 分区 |
 | `autoStart` | `true` | 第一次调用时自动拉起服务 |
-| `screenshotDir` | `<仓库>/shots` | 截图落盘目录；留空自动回退到宿主工作目录下 `.camofox-shots` |
+| `screenshotDir` | 空 | 截图落盘目录；留空自动回退到宿主工作目录下 `.camofox-shots` |
 | `ytDlpPath` | 空 | yt-dlp 绝对路径（如 `E:\Program Files\yt-dlp\yt-dlp.exe`）。后端只探测 PATH 里的 `yt-dlp`，装而不在 PATH 时配这个键：插件拉服务会把它目录前置进子进程 PATH，字幕才走快路径；`status` 也按它报告 |
 | `maxChars` | `40000` | 单次回给模型的文本上限 |
 | `proxy` | `enabled:false` | 浏览器代理；打开后 Camoufox 用 GeoIP 按出口 IP 对齐时区/语言 |

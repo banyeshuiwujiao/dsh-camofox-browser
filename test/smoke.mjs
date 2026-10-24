@@ -213,6 +213,28 @@ check('snapshot 未截断时沿用后端 nextOffset', () => {
   assert.ok(!/会跳过/.test(out), '不该出现跳丢警告')
 })
 
+check('snapshot 小窗口 (maxChars < 260) 续点能正常前进不卡死在 0 (S2)', () => {
+  const big = 'hello world '.repeat(100)
+  const payload = { snapshot: big, hasMore: true, nextOffset: 800, url: 'https://e.com' }
+  const tinyOpts = { ...opts, maxChars: 120 }
+  const out = shapeResult('snapshot', payload, tinyOpts, { offset: 0 })
+  const m = out.match(/offset=(\d+) 续读/)
+  assert.ok(m, '小窗口也应给出续读提示')
+  const cont = Number(m[1])
+  assert.ok(cont > 0, `续点必须大于 0，避免死循环；实际: ${cont}`)
+})
+
+check('snapshot 为对象时不按格式化 JSON 偏移，直接沿用 backendNext (S3)', () => {
+  const objPayload = {
+    snapshot: { type: 'tree', nodes: [{ id: 1, name: 'root' }, { id: 2, name: 'child' }] },
+    hasMore: true,
+    nextOffset: 600,
+  }
+  const out = shapeResult('snapshot', objPayload, { ...opts, maxChars: 50 }, { offset: 0 })
+  assert.match(out, /用 offset=600 继续/, '对象快照应直接使用后端的 nextOffset')
+  assert.ok(!/别用后端段尾/.test(out), '对象快照不应出现文本切片跳丢警告')
+})
+
 check('formatStatus 报告归属与能力', () => {
   const health = { ok: true, engine: 'camoufox', browserConnected: true, browserRunning: true, activeTabs: 1, activeSessions: 1, memory: { rssMb: 133 } }
   const caps = { baseUrl: 'http://127.0.0.1:9377', managed: false, pin: true, ytDlp: false, ytDlpVersion: '', interactive: 'desktop', notes: ['note me'] }
@@ -226,6 +248,14 @@ check('formatStatus 报告归属与能力', () => {
   assert.match(out2, /本插件托管/)
   assert.match(out2, /pin：不支持/)
   assert.match(out2, /快路径/)
+})
+
+check('formatStatus 在脱机/未运行时正确报告未运行 (S1)', () => {
+  const health = {}
+  const caps = { baseUrl: 'http://127.0.0.1:9377', managed: false, pin: false, ytDlp: false, ytDlpVersion: '', interactive: 'off', notes: [] }
+  const out = formatStatus(health, caps)
+  assert.match(out, /服务：未运行/)
+  assert.match(out, /服务未连接或未就绪/)
 })
 
 check('超长结果被截断', () => {
