@@ -88,20 +88,24 @@ camofox {action:"open", url:"https://example.com"}
 
 ## 工具
 
-单个工具 `camofox`，15 个 action：
+单个工具 `camofox`，**21 个 action**：
 
 | action | 作用 |
 |---|---|
-| `open` | 开标签页，返回 `tabId` |
-| `snapshot` | 可交互元素树，元素带 `e1`/`e2` 引用（大页面用 `offset` 分页） |
+| `open` | 开标签页，返回 `tabId`（可传 `pin:true` 锁定防回收） |
+| `snapshot` | 可交互元素树，元素带 `e1`/`e2` 引用（大页面用 `offset` 分页；被 maxChars 截断时给出按实际展示量算的续读偏移，不会跳丢内容） |
 | `text` | **取正文纯文本** —— 读文章、查资料最省 token |
 | `click` / `type` / `press` | 用 `ref`（如 `e1`）或 `selector` 交互 |
 | `navigate` | 跳 URL，或用搜索宏（`@google_search` 等 14 个） |
 | `scroll` | 滚动 |
-| `screenshot` | 截图**存盘**并返回路径（不进上下文；要看图再用 `read_image`） |
+| `screenshot` | 截图**存盘**并返回路径（不进上下文；`screenshotDir` 留空自动回退 `<cwd>/.camofox-shots`，不再抛 ENOENT） |
 | `links` / `evaluate` | 取页面链接 / 在页面里执行 JS |
 | `tabs` / `close` / `reset` | 列出 / 关闭标签页；清空会话（cookie + localStorage） |
-| `transcript` | 抓 YouTube 字幕（走 yt-dlp，无需 API key） |
+| `transcript` | 抓 YouTube 字幕：**yt-dlp 优先，未装则自动降级浏览器兜底**（较慢仍可用） |
+| `pin` | 锁定/解锁标签页（免疫空闲回收）；后端无该路由时返回可读错误而非整页 HTML |
+| `status` | **查服务健康度、后端能力**（pin / yt-dlp / interactive 模式）与托管归属 |
+| `wait` | 等页面网络空闲（SPA 水合首选，替代反复 evaluate 轮询） |
+| `refresh` / `back` / `forward` | 刷新 / 后退 / 前进 |
 
 典型流程：
 
@@ -124,7 +128,8 @@ camofox {action:"text", tabId:"..."}                    → 正文
 | `tempDir` | `E:\caches\tmp` | 引擎解压的临时目录（默认会占 C 盘约 600MB 峰值） |
 | `userId` | `dsh` | 会话所有者，决定 cookie/localStorage 分区 |
 | `autoStart` | `true` | 第一次调用时自动拉起服务 |
-| `screenshotDir` | `<仓库>/shots` | 截图落盘目录 |
+| `screenshotDir` | `<仓库>/shots` | 截图落盘目录；留空自动回退到宿主工作目录下 `.camofox-shots` |
+| `ytDlpPath` | 空 | yt-dlp 绝对路径（如 `E:\Program Files\yt-dlp\yt-dlp.exe`）。后端只探测 PATH 里的 `yt-dlp`，装而不在 PATH 时配这个键：插件拉服务会把它目录前置进子进程 PATH，字幕才走快路径；`status` 也按它报告 |
 | `maxChars` | `40000` | 单次回给模型的文本上限 |
 | `proxy` | `enabled:false` | 浏览器代理；打开后 Camoufox 用 GeoIP 按出口 IP 对齐时区/语言 |
 
@@ -156,6 +161,10 @@ camofox {action:"text", tabId:"..."}                    → 正文
 - **`POST /tabs` 必须带 `sessionKey`**：README 的示例只给了 `userId`，照抄会得到 `{"error":"userId and sessionKey required"}`。
 - **`npm install` 会卡**：这台机器上 npm 全局 `proxy` 指向本地代理，连国内镜像也绕一圈（`npm ping` 9.87s vs 直连 0.53s）；改用 `--ignore-scripts` 并跳过 devDependencies（`openclaw` + jest + typescript 与跑服务无关）。
 - **截图不要塞进上下文**：base64 一张 1280×983 的 PNG 约 900KB。本插件一律落盘。
+- **`snapshot` 分页曾静默丢内容**（已修）：后端一窗约 80k 字符、`nextOffset` 是段尾，而插件 `maxChars` 只展示 40k；照抄段尾续读会跳过中间 35k。现在续读提示按**实际展示量**计算，并显式警告勿用后端段尾偏移。
+- **冷启动首个 `open` 偶发 500**（已缓解）：浏览器 pre-warm 未完成时后端会回 500。插件对建标签类 500 自动退避重试一次。
+- **`pin` 依赖后端支持**：`/tabs/:id/pin` 是 fork 新增路由；上游原版无此路由，`pin` 会 404（`status` 的 pin 能力探测可提前发现）。
+- **YouTube 字幕快路径**：yt-dlp 装在非 PATH 目录（如 `E:\Program Files\yt-dlp\`）时，后端探测不到会一直走浏览器兜底；配 `ytDlpPath` 并在插件托管模式下重启服务后生效。
 
 ## License
 

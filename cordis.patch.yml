@@ -56,8 +56,12 @@
         autoStart: true
         startTimeoutMs: 120000
         requestTimeoutMs: 90000
-        # 截图落盘目录；空则落到 DSH 会话工作区（一次性草稿）。
+        # 截图落盘目录；空则落到宿主工作目录下的 .camofox-shots（saveShot 已修复空串回退）。
         screenshotDir: ''
+        # yt-dlp 绝对路径（如 'C:\\Program Files\\yt-dlp\\yt-dlp.exe'）。后端只探测 PATH 里的
+        # 'yt-dlp'：装而不在 PATH 时，配上这个键，插件拉服务会把它目录前置进子进程 PATH，
+        # YouTube 字幕走快路径；status 也按它报告。留空 = 只按后端默认探测。
+        ytDlpPath: ''
         # 单次返回给模型的文本上限，防止一次快照吃满上下文。
         maxChars: 40000
         # 浏览器代理。默认关闭：直连时 Camoufox 不声明地理位置，身份更中性。
