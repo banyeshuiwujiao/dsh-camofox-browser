@@ -116,11 +116,37 @@ check('reset 用 userId 清整个会话', () => {
   assert.equal(call.path, '/sessions/u1')
 })
 
+check('upload 打到 /tabs/:tabId/upload，支持 path 与 ref/selector', () => {
+  const call = buildCall({ action: 'upload', tabId: 't1', path: 'C:\\tmp\\file.png', ref: 'e1' }, opts)
+  assert.equal(call.method, 'POST')
+  assert.equal(call.path, '/tabs/t1/upload')
+  assert.deepEqual(call.body, { userId: 'u1', path: 'C:\\tmp\\file.png', ref: 'e1' })
+  assert.throws(() => buildCall({ action: 'upload', tabId: 't1' }, opts), /需要 path/)
+})
+
+check('console 打到 /tabs/:tabId/console 并支持参数', () => {
+  const call = buildCall({ action: 'console', tabId: 't1', types: 'error,warn', limit: 50, clear: true }, opts)
+  assert.equal(call.method, 'GET')
+  assert.match(call.path, /^\/tabs\/t1\/console\?/)
+  assert.match(call.path, /types=error%2Cwarn/)
+  assert.match(call.path, /limit=50/)
+  assert.match(call.path, /clear=true/)
+})
+
+check('network 打到 /tabs/:tabId/network 并支持参数', () => {
+  const call = buildCall({ action: 'network', tabId: 't1', resourceTypes: 'fetch,xhr', status: 'failed' }, opts)
+  assert.equal(call.method, 'GET')
+  assert.match(call.path, /^\/tabs\/t1\/network\?/)
+  assert.match(call.path, /resourceTypes=fetch%2Cxhr/)
+  assert.match(call.path, /status=failed/)
+})
+
 check('需要 tabId 的 action 缺 tabId 就报错', () => {
-  for (const action of ['snapshot', 'click', 'type', 'screenshot', 'text', 'links', 'evaluate', 'wait', 'refresh', 'back', 'forward', 'pin']) {
+  for (const action of ['snapshot', 'click', 'type', 'screenshot', 'text', 'links', 'evaluate', 'wait', 'refresh', 'back', 'forward', 'pin', 'upload', 'console', 'network']) {
     const args = { action, ...(action === 'click' ? { ref: 'e1' } : {}) }
     if (action === 'type') args.text = 'x'
     if (action === 'evaluate') args.expression = '1'
+    if (action === 'upload') args.path = '/a'
     assert.throws(() => buildCall(args, opts), /需要 tabId/, `${action} 应报错`)
   }
 })
