@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { buildCall, shapeResult, DEFAULTS, SEARCH_MACROS } from '../lib/index.js'
+import { buildCall, shapeResult, formatStatus, DEFAULTS, SEARCH_MACROS } from '../lib/index.js'
 
 let passed = 0
 function check(name, fn) {
@@ -89,6 +89,27 @@ check('transcript 不需要 tabId', () => {
   assert.equal(call.body.url, 'https://youtu.be/x')
 })
 
+check('status 走 /health，不带 tabId', () => {
+  const call = buildCall({ action: 'status' }, opts)
+  assert.equal(call.method, 'GET')
+  assert.equal(call.path, '/health')
+})
+
+check('wait 带 timeout 与开关，且需要 tabId', () => {
+  const call = buildCall({ action: 'wait', tabId: 't1', timeout: 5000, dismissConsent: true }, opts)
+  assert.deepEqual(call.body, { userId: 'u1', timeout: 5000, dismissConsent: true })
+  assert.throws(() => buildCall({ action: 'wait' }, opts), /需要 tabId/)
+})
+
+check('refresh/back/forward 各自打到对应路由', () => {
+  for (const [action, path] of [['refresh', '/tabs/t1/refresh'], ['back', '/tabs/t1/back'], ['forward', '/tabs/t1/forward']]) {
+    const call = buildCall({ action, tabId: 't1' }, opts)
+    assert.equal(call.method, 'POST')
+    assert.equal(call.path, path)
+    assert.equal(call.body.userId, 'u1')
+  }
+})
+
 check('reset 用 userId 清整个会话', () => {
   const call = buildCall({ action: 'reset' }, opts)
   assert.equal(call.method, 'DELETE')
@@ -96,7 +117,7 @@ check('reset 用 userId 清整个会话', () => {
 })
 
 check('需要 tabId 的 action 缺 tabId 就报错', () => {
-  for (const action of ['snapshot', 'click', 'type', 'screenshot', 'text', 'links', 'evaluate']) {
+  for (const action of ['snapshot', 'click', 'type', 'screenshot', 'text', 'links', 'evaluate', 'wait', 'refresh', 'back', 'forward', 'pin']) {
     const args = { action, ...(action === 'click' ? { ref: 'e1' } : {}) }
     if (action === 'type') args.text = 'x'
     if (action === 'evaluate') args.expression = '1'
@@ -138,6 +159,47 @@ check('transcript 错误响应能够格式化并提示排障建议', () => {
 check('snapshot 的 hasMore 会提示 offset', () => {
   const out = shapeResult('snapshot', { snapshot: 'x', hasMore: true, nextOffset: 500 }, opts)
   assert.match(out, /offset=500/)
+})
+
+check('snapshot 被 maxChars 截断时，续点按实际展示量算，绝不跳丢', () => {
+  // 复现真实事故：后端整段 80k（nextOffset=74800），插件只展示 40k。
+  // 旧行为：提示 offset=74800 → 40k..74.8k 之间的 3.48 万字符被静默跳过。
+  const big = 'a'.repeat(80000)
+  const payload = { snapshot: big, hasMore: true, nextOffset: 74800, url: 'https://e.com' }
+  const smallOpts = { ...opts, maxChars: 40000 }
+  const out = shapeResult('snapshot', payload, smallOpts, { offset: 0 })
+  const m = out.match(/offset=(\d+) 续读/)
+  assert.ok(m, `应给出续读提示，实际开头：${out.slice(0, 120)}…`)
+  const cont = Number(m[1])
+  assert.ok(cont < 74800, `续点 ${cont} 必须小于后端段尾 74800，否则跳丢`)
+  assert.ok(cont >= 39000, `续点 ${cont} 应接近实际展示量（~39740）`)
+  assert.match(out, /会跳过 \d+ 字符/)
+  // 续点之后没有任何内容被跳过：(0, cont) 覆盖展示区，且 cont ≤ 展示量起点单调推进
+  const out2 = shapeResult('snapshot', payload, smallOpts, { offset: 39740 })
+  const m2 = out2.match(/offset=(\d+) 续读/)
+  if (m2) assert.ok(Number(m2[1]) > cont, '第二次续读必须单调前进')
+})
+
+check('snapshot 未截断时沿用后端 nextOffset', () => {
+  const payload = { snapshot: 'x', hasMore: true, nextOffset: 500, url: 'https://e.com' }
+  const out = shapeResult('snapshot', payload, { ...opts, maxChars: 40000 }, { offset: 0 })
+  assert.match(out, /用 offset=500 继续/)
+  assert.ok(!/会跳过/.test(out), '不该出现跳丢警告')
+})
+
+check('formatStatus 报告归属与能力', () => {
+  const health = { ok: true, engine: 'camoufox', browserConnected: true, browserRunning: true, activeTabs: 1, activeSessions: 1, memory: { rssMb: 133 } }
+  const caps = { baseUrl: 'http://127.0.0.1:9377', managed: false, pin: true, ytDlp: false, ytDlpVersion: '', interactive: 'desktop', notes: ['note me'] }
+  const out = formatStatus(health, caps)
+  assert.match(out, /复用外部实例/)
+  assert.match(out, /pin：支持/)
+  assert.match(out, /浏览器兜底/)
+  assert.match(out, /interactive=desktop/)
+  assert.match(out, /note me/)
+  const out2 = formatStatus(health, { ...caps, pin: false, managed: true, ytDlp: true, ytDlpVersion: '2026.10.0' })
+  assert.match(out2, /本插件托管/)
+  assert.match(out2, /pin：不支持/)
+  assert.match(out2, /快路径/)
 })
 
 check('超长结果被截断', () => {
