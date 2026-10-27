@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { buildCall, shapeResult, formatStatus, DEFAULTS, SEARCH_MACROS } from '../lib/index.js'
+import { buildCall, shapeResult, formatStatus, projectRunResult, pickPath, DEFAULTS, SEARCH_MACROS } from '../lib/index.js'
 
 let passed = 0
 function check(name, fn) {
@@ -303,6 +303,69 @@ check('trace 接受 subAction 且需要 tabId', () => {
 
 check('null 响应不炸', () => {
   assert.equal(shapeResult('text', null, opts), '(空响应)')
+})
+
+console.log('run / text / session')
+
+check('run：steps 注入内置工具（含新增三个）且可执行', () => {
+  const call = buildCall({ action: 'run', tabId: 't1', steps: 'return 1' }, opts)
+  assert.equal(call.path, '/tabs/t1/evaluate')
+  for (const fn of ['const sleep', 'const wait =', 'const waitUntil', 'const setValue', 'const clickByText', 'const scrollIntoViewClick', 'const waitResponse', 'const download']) {
+    assert.ok(call.body.expression.includes(fn), `prelude 缺 ${fn}`)
+  }
+  assert.throws(() => buildCall({ action: 'run', tabId: 't1' }, opts), /需要 steps/)
+})
+
+check('run：select 单字段只回该叶子', () => {
+  const out = shapeResult('run', { ok: true, result: { a: { b: 7 }, c: 8 } }, opts, { select: 'a.b' })
+  assert.equal(out, '7')
+})
+
+check('run：select 多字段按叶子名组对象，冲突回退全路径', () => {
+  const out = shapeResult('run', { ok: true, result: { name: 'n', nested: { id: 3 } } }, opts, { select: 'name, nested.id' })
+  assert.deepEqual(JSON.parse(out), { name: 'n', id: 3 })
+  const clash = projectRunResult({ a: { x: 1 }, b: { x: 2 } }, { select: 'a.x, b.x' })
+  assert.deepEqual(JSON.parse(clash), { x: 1, 'b.x': 2 })
+})
+
+check('run：不传 select 回全量；select 未命中给出提示', () => {
+  assert.deepEqual(JSON.parse(shapeResult('run', { ok: true, result: [1, 2] }, opts)), [1, 2])
+  assert.match(shapeResult('run', { ok: true, result: { a: 1 } }, opts, { select: 'zzz' }), /未命中/)
+})
+
+check('run：maxChars 生效（真正省 token）', () => {
+  const out = shapeResult('run', { ok: true, result: { blob: 'a'.repeat(5000) } }, { ...opts, maxChars: 40000 }, { maxChars: 100 })
+  assert.ok(out.length < 300, `实际 ${out.length}`)
+  assert.match(out, /已截断/)
+})
+
+check('pickPath 支持数组下标与缺失路径', () => {
+  assert.equal(pickPath({ a: [{ b: 'x' }] }, 'a.0.b'), 'x')
+  assert.equal(pickPath({ a: 1 }, 'a.b.c'), undefined)
+  assert.equal(pickPath(null, 'a'), undefined)
+})
+
+check('text：带 selector 时只取该区块，且表达式含选择器', () => {
+  const call = buildCall({ action: 'text', tabId: 't1', selector: '.main' }, opts)
+  assert.match(call.body.expression, /\.main/)
+  assert.match(call.body.expression, /querySelector/)
+  assert.match(buildCall({ action: 'text', tabId: 't1' }, opts).body.expression, /document\.body/)
+})
+
+check('text：selector 未命中给出明确提示', () => {
+  const out = shapeResult('text', { ok: true, result: { found: false, selector: '.nope', url: 'https://e' } }, opts)
+  assert.match(out, /未找到选择器 \.nope/)
+})
+
+check('session：GET /sessions/:userId，输出含 UA 家族与标签数', () => {
+  const call = buildCall({ action: 'session' }, opts)
+  assert.equal(call.method, 'GET')
+  assert.equal(call.path, '/sessions/u1')
+  const out = shapeResult('session', { userId: 'u1', exists: true, userAgent: 'Mozilla/5.0 Chrome/142.0.0.0', tabCount: 2 }, opts)
+  assert.match(out, /标签页数：2/)
+  assert.match(out, /Chrome UA/)
+  const def = shapeResult('session', { userId: 'u1', exists: true, userAgent: '', tabCount: 0 }, opts)
+  assert.match(def, /Firefox（默认）/)
 })
 
 console.log(`\n${passed} 项通过`)
