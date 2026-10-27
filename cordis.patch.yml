@@ -70,6 +70,11 @@
         # 真正需要（如保利威 #024 屏蔽 Firefox）时，用 camofox 工具 action=open 的
         # userAgent 参数，只给那一个会话开，别在这里全局开。
         userAgent: ''
+        # ⚠️ 主世界执行（注入 CAMOFOX_ALLOW_MAIN_WORLD）。**默认 false。**
+        # 开启后 run(evaluate) 可读页面自定义全局（window.player、播放器加速脚本等），
+        # 但会关掉 Camoufox 的世界隔离（disableWorldIsolation），反检测变弱。
+        # 只建议为确实需要操作页面全局的站点单独部署，用完关掉并重启服务。
+        allowMainWorld: false
         # 浏览器代理。默认关闭：直连时 Camoufox 不声明地理位置，身份更中性。
         # 打开后 camofox 会用 GeoIP 按出口 IP 自动对齐时区/语言。
         proxy:
