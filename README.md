@@ -88,18 +88,18 @@ camofox {action:"open", url:"https://example.com"}
 
 ## 工具
 
-单个工具 `camofox`，**26 个 action**：
+单个工具 `camofox`，**31 个 action**：
 
 | action | 作用 |
 |---|---|
-| `open` | 开标签页，返回 `tabId`（可传 `pin:true` 锁定防回收） |
+| `open` | 开标签页，返回 `tabId`（可传 `pin:true` 锁定防回收；`reuseTab:true` 复用同组内 URL 相同的标签页，默认新开） |
 | `snapshot` | 可交互元素树，元素带 `e1`/`e2` 引用（大页面用 `offset` 分页；被 maxChars 截断时给出按实际展示量算的续读偏移，不会跳丢内容） |
 | `text` | **取正文纯文本** —— 读文章、查资料最省 token |
 | `click` / `type` / `press` | 用 `ref`（如 `e1`）或 `selector` 交互；三者执行后**自动探测新标签页并追加提醒**（含 tabId/URL/标题） |
 | `navigate` | 跳 URL，或用搜索宏（`@google_search` 等 14 个） |
 | `scroll` | 滚动（注入原生 `window.scrollBy`，不等 networkidle；可用 `timeoutMs` 控预算，默认 5000ms） |
 | `screenshot` | 截图**存盘**并返回路径（不进上下文；`screenshotDir` 留空自动回退 `<cwd>/.camofox-shots`，不再抛 ENOENT） |
-| `links` / `evaluate` | 取页面链接 / 在页面里执行 JS |
+| `links` / `evaluate` | 取页面链接 / 在页面里执行 JS（`timeoutMs` 可放宽到 300000ms，长任务不必反复重试） |
 | `tabs` / `close` / `reset` | 列出 / 关闭标签页；清空会话（cookie + localStorage） |
 | `transcript` | 抓 YouTube 字幕：**yt-dlp 优先，未装则自动降级浏览器兜底**（较慢仍可用） |
 | `pin` | 锁定/解锁标签页（免疫空闲回收）；后端无该路由时返回可读错误而非整页 HTML |
@@ -111,6 +111,13 @@ camofox {action:"open", url:"https://example.com"}
 | `network` | 查网络 HTTP 请求与响应（`resourceTypes` / `status` 过滤，`clear` 读后清空） |
 | `set_cookies` | **直接注入 Cookies**（对象数组或 `"a=1; b=2"` + `domain`），免扫码/免短信登录 |
 | `trace` | **动作级监听**：`subAction` 执行前后自动清空并截获该动作触发的 XHR/fetch 与控制台日志，一次调用拿三段结果 |
+| `drag` | **原生可信拖拽**：起点用 `start` 坐标或 `handle`（快照 ref / 选择器），终点用 `end` 坐标或 `deltaX`/`deltaY`；`easing`/`jitterPx`/`overshootPx` 控制拟人轨迹 —— **拖滑块验证**主用它。过冲先按视口 4px 钳制，再按可选 `overshootBounds`（验证码容器框）钳制；越界时返回 `overshootClamped:true` |
+| `challenge` | **检测验证挑战控件**（reCAPTCHA/hCaptcha/Turnstile/极验/阿里云/腾讯/滑块），滑块会直接给出 `start`+`deltaX`+`overshootBounds` 拖拽建议（需后端启用 `login-guard` 插件） |
+| `puzzle_gap` | **滑块缺口计算**：自动分析背景与拼图像素给出 `deltaX` 与拖拽建议；`colorMode`（`luma`/`ycbcr`/`hsv`/`auto`）应对彩色渐变背景，色彩匹配置信度低时自动用 Sobel 边缘兜底（`edgeFallback`，默认开） |
+| `dialog` | 查看/设置**原生 JS 弹窗**（alert/confirm/prompt/beforeunload）处置策略 `dismiss`/`accept`/`auto`；传 `domain` 只对某域名生效（通配符至少两段、每标签最多 32 条；`clearDomain`/`clearDomains` 可撤销），并回报最近弹窗（需后端 `login-guard` 插件；beforeunload 恒 accept 以便导航继续） |
+| `video` | **视频刷课一等动作**：自动倍速、防后台/暂停的 Keeper 守护（自调度 `setTimeout`，不累积漂移）、片尾自动保存进度、`queryOnly` 查询状态 |
+| `capture_element` | **元素级取图**：普通元素截图、原生 canvas / `data:` 原图直出（验证码、拼图），比全屏截图裁剪更精确更省 token |
+| `auth_export` / `auth_import` | 一键导出/导入会话登录态（cookies + localStorage），重启后免重复登录 |
 
 典型流程：
 
@@ -119,6 +126,23 @@ camofox {action:"open", url:"https://example.com"}      → tabId
 camofox {action:"snapshot", tabId:"..."}                → [link "Learn more" e1]
 camofox {action:"click", tabId:"...", ref:"e1"}
 camofox {action:"text", tabId:"..."}                    → 正文
+```
+
+登录验证（滑块 / 弹窗）流程：
+
+```
+camofox {action:"challenge", tabId:"..."}
+  → { kind:"slider", suggestedDrag:{start:{x,y}, deltaX} }
+camofox {action:"drag", tabId:"...", start:{x,y}, deltaX:266, easing:"easeInOut", steps:24, durationMs:900}
+camofox {action:"dialog", tabId:"...", domain:"login.example.com", policy:"accept"}  # 只对登录域名放行，先设策略
+camofox {action:"click", tabId:"...", ref:"e9"}
+```
+
+拼图缺口（彩色/渐变背景）：
+
+```
+camofox {action:"puzzle_gap", tabId:"...", colorMode:"auto"}
+  → deltaX + method:"edge"/"color" + 建议 drag 指令
 ```
 
 ## 配置
