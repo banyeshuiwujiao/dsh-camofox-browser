@@ -368,4 +368,254 @@ check('session：GET /sessions/:userId，输出含 UA 家族与标签数', () =>
   assert.match(def, /Firefox（默认）/)
 })
 
+check('drag：handle + deltaX 拖滑块（原生可信拖拽语义）', () => {
+  const call = buildCall({ action: 'drag', tabId: 't1', handle: 'e12', deltaX: 266, steps: 24, durationMs: 900, easing: 'easeInOut', jitterPx: 1.5 }, opts)
+  assert.equal(call.method, 'POST')
+  assert.equal(call.path, '/tabs/t1/drag')
+  assert.deepEqual(call.body, { userId: 'u1', handle: 'e12', deltaX: 266, steps: 24, durationMs: 900, easing: 'easeInOut', jitterPx: 1.5 })
+})
+
+check('drag：start + end 坐标', () => {
+  const call = buildCall({ action: 'drag', tabId: 't1', start: { x: 10, y: 20 }, end: { x: 110, y: 20 } }, opts)
+  assert.deepEqual(call.body, { userId: 'u1', start: { x: 10, y: 20 }, end: { x: 110, y: 20 } })
+})
+
+check('drag：缺起点或终点都报错', () => {
+  assert.throws(() => buildCall({ action: 'drag', tabId: 't1', deltaX: 10 }, opts), /需要 start/)
+  assert.throws(() => buildCall({ action: 'drag', tabId: 't1', handle: 'e1' }, opts), /需要 end/)
+})
+
+check('challenge：打到 /verification/challenge', () => {
+  const call = buildCall({ action: 'challenge', tabId: 't1' }, opts)
+  assert.equal(call.method, 'POST')
+  assert.equal(call.path, '/verification/challenge')
+  assert.deepEqual(call.body, { userId: 'u1', tabId: 't1' })
+})
+
+check('dialog：打到 /verification/dialog 并带 policy/reset', () => {
+  const call = buildCall({ action: 'dialog', tabId: 't1', policy: 'accept' }, opts)
+  assert.equal(call.path, '/verification/dialog')
+  assert.deepEqual(call.body, { userId: 'u1', tabId: 't1', policy: 'accept' })
+  const reset = buildCall({ action: 'dialog', tabId: 't1', reset: true }, opts)
+  assert.equal(reset.body.reset, true)
+})
+
+check('challenge 结果给出滑块建议', () => {
+  const out = shapeResult('challenge', {
+    tabId: 't1', count: 1, dialogPolicy: 'dismiss', lastDialog: null,
+    challenges: [{ kind: 'slider', selector: '.slide-verify', box: { x: 1, y: 2, width: 300, height: 40 }, suggestedDrag: { start: { x: 20, y: 22 }, deltaX: 260 } }],
+  }, opts)
+  assert.match(out, /slider/)
+  assert.match(out, /滑块建议：action=drag/)
+  assert.match(out, /deltaX=260/)
+})
+
+check('dialog 结果展示策略与最近弹窗', () => {
+  const out = shapeResult('dialog', { dialogPolicy: 'accept', supportedPolicies: ['dismiss', 'accept', 'auto'], lastDialog: { type: 'confirm', message: 'go?' } }, opts)
+  assert.match(out, /弹窗策略：accept/)
+  assert.match(out, /confirm/)
+})
+
+check('drag 结果一句话概括', () => {
+  const out = shapeResult('drag', { start: { x: 1, y: 2 }, end: { x: 3, y: 2 }, steps: 12, durationMs: 800, easing: 'linear', button: 'left' }, opts)
+  assert.match(out, /拖拽完成/)
+})
+
+console.log('新动作与优化验证')
+
+check('click 支持直接通过 text 参数点击', () => {
+  const call = buildCall({ action: 'click', tabId: 't1', text: '登录' }, opts)
+  assert.equal(call.method, 'POST')
+  assert.equal(call.path, '/tabs/t1/evaluate')
+  assert.match(call.body.expression, /click: 未找到包含文本的元素/)
+  assert.match(call.body.expression, /"登录"/)
+})
+
+check('evaluate 和 run 支持 timeoutMs 透传', () => {
+  const evalCall = buildCall({ action: 'evaluate', tabId: 't1', expression: '1+1', timeoutMs: 60000 }, opts)
+  assert.equal(evalCall.body.timeoutMs, 60000)
+  const runCall = buildCall({ action: 'run', tabId: 't1', steps: 'return 42', timeoutMs: 120000 }, opts)
+  assert.equal(runCall.body.timeoutMs, 120000)
+})
+
+check('video 动作生成完整视频控制脚本并支持倍速、Keeper与自动保存', () => {
+  const call = buildCall({ action: 'video', tabId: 't1', rate: 16, autoSave: '保存学习进度', seek: 100 }, opts)
+  assert.equal(call.path, '/tabs/t1/evaluate')
+  assert.match(call.body.expression, /targetRate = 16/)
+  assert.match(call.body.expression, /doKeepAlive = true/)
+  assert.match(call.body.expression, /"保存学习进度"/)
+  assert.match(call.body.expression, /seekTarget = 100/)
+
+  const res = shapeResult('video', { ok: true, dur: 3000, t: 1500, pct: 50.0, rate: 16, paused: false, ended: false, saved: false, keeperInstalled: true, videoCount: 1 }, opts)
+  assert.match(res, /1500\/3000s/)
+  assert.match(res, /50%/)
+  assert.match(res, /16x/)
+  assert.match(res, /Keeper守护已开启/)
+})
+
+check('capture_element 校验参数并标记为 composite', () => {
+  assert.throws(() => buildCall({ action: 'capture_element', tabId: 't1' }, opts), /需要 ref（如 e1）或 selector/)
+  const call = buildCall({ action: 'capture_element', tabId: 't1', selector: 'canvas.code' }, opts)
+  assert.equal(call.action, 'capture_element')
+  assert.equal(call.kind, 'composite')
+})
+
+check('puzzle_gap 打到 /verification/puzzle-gap 并且 shapeResult 给出建议拖拽指令', () => {
+  const call = buildCall({ action: 'puzzle_gap', tabId: 't1', bgSelector: '#bg', pieceSelector: '#slice' }, opts)
+  assert.equal(call.path, '/verification/puzzle-gap')
+  assert.deepEqual(call.body, { userId: 'u1', tabId: 't1', bgSelector: '#bg', pieceSelector: '#slice' })
+
+  const out = shapeResult('puzzle_gap', {
+    ok: true,
+    deltaX: 180,
+    confidence: 0.9,
+    suggestedDrag: { handle: '#btn', start: { x: 50, y: 100 }, deltaX: 180, easing: 'easeInOut', jitterPx: 2, overshootPx: 6, durationMs: 850 }
+  }, opts)
+  assert.match(out, /deltaX: 180px/)
+  assert.match(out, /置信度: 90%/)
+  assert.match(out, /action="drag"/)
+  assert.match(out, /easing="easeInOut"/)
+})
+
+check('auth_export 和 auth_import 规格与格式化', () => {
+  const expCall = buildCall({ action: 'auth_export' }, opts)
+  assert.equal(expCall.method, 'GET')
+  assert.equal(expCall.path, '/sessions/u1/storage_state')
+
+  const expOut = shapeResult('auth_export', { cookies: [{ name: 'a', value: '1' }], origins: [{ origin: 'https://example.com' }] }, opts)
+  assert.match(expOut, /共 1 条 Cookies/)
+  assert.match(expOut, /1 个 Origin/)
+
+  const impCall = buildCall({ action: 'auth_import' }, opts)
+  assert.equal(impCall.action, 'auth_import')
+  assert.equal(impCall.kind, 'composite')
+})
+
+check('evaluate 对双重序列化 JSON 自动反序列化格式化', () => {
+  const out = shapeResult('evaluate', { ok: true, result: JSON.stringify({ code: 200, status: 'ok' }) }, opts)
+  assert.match(out, /"code": 200/)
+  assert.match(out, /"status": "ok"/)
+})
+
+check('video Keeper 用自调度 setTimeout（不累积漂移），可关闭且状态真实', () => {
+  const call = buildCall({ action: 'video', tabId: 't1' }, opts)
+  const src = call.body.expression
+  assert.match(src, /setTimeout\(keeperTick/)
+  assert.ok(!src.includes('setInterval('), 'Keeper 不应再用 setInterval（会累积漂移）')
+  assert.match(src, /keeperState\.nextAt/)
+  assert.match(src, /clearTimeout/)
+  assert.match(src, /keeperAlive\(\)/)
+  // 关闭 keeper 时也必须停掉已装的定时器
+  assert.match(src, /else if \(window\.__camofox_video_keeper_state\)/)
+  const off = buildCall({ action: 'video', tabId: 't1', keepAlive: false }, opts)
+  assert.match(off.body.expression, /doKeepAlive = false/)
+})
+
+check('puzzle_gap 支持 colorMode / edgeFallback 透传', () => {
+  const call = buildCall({ action: 'puzzle_gap', tabId: 't1', colorMode: 'hsv', edgeFallback: false }, opts)
+  assert.equal(call.path, '/verification/puzzle-gap')
+  assert.deepEqual(call.body, { userId: 'u1', tabId: 't1', colorMode: 'hsv', edgeFallback: false })
+  const auto = buildCall({ action: 'puzzle_gap', tabId: 't1', colorMode: 'auto' }, opts)
+  assert.equal(auto.body.colorMode, 'auto')
+  assert.equal(auto.body.edgeFallback, undefined, '默认不显式发送 edgeFallback')
+})
+
+check('dialog 支持按域名作用域与清除覆盖', () => {
+  const scoped = buildCall({ action: 'dialog', tabId: 't1', domain: 'login.example.com', policy: 'accept' }, opts)
+  assert.deepEqual(scoped.body, { userId: 'u1', tabId: 't1', policy: 'accept', domain: 'login.example.com' })
+  const clear = buildCall({ action: 'dialog', tabId: 't1', clearDomain: 'login.example.com' }, opts)
+  assert.equal(clear.body.clearDomain, 'login.example.com')
+  const clearAll = buildCall({ action: 'dialog', tabId: 't1', clearDomains: true }, opts)
+  assert.equal(clearAll.body.clearDomains, true)
+})
+
+check('dialog 结果展示域名覆盖与当前生效策略', () => {
+  const out = shapeResult('dialog', {
+    dialogPolicy: 'dismiss',
+    supportedPolicies: ['dismiss', 'accept', 'auto'],
+    host: 'login.example.com',
+    effectivePolicy: 'accept',
+    dialogPolicyByDomain: { 'login.example.com': 'accept' },
+    lastDialog: null,
+  }, opts)
+  assert.match(out, /login\.example\.com -> accept/)
+  assert.match(out, /实际生效：accept/)
+})
+
+check('puzzle_gap 输出带识别方法/色彩空间', () => {
+  const out = shapeResult('puzzle_gap', { ok: true, deltaX: 100, confidence: 0.8, method: 'edge', colorMode: 'edge' }, opts)
+  assert.match(out, /方法: edge/)
+})
+
+check('video/run/click 生成的页面脚本语法可解析', () => {
+  for (const args of [
+    { action: 'video', tabId: 't1' },
+    { action: 'video', tabId: 't1', mainWorld: true, autoSave: '保存', seek: 10, queryOnly: true },
+    { action: 'run', tabId: 't1', steps: 'return 1' },
+    { action: 'click', tabId: 't1', text: '登录' },
+  ]) {
+    const call = buildCall(args, opts)
+    assert.doesNotThrow(() => new Function('return ' + call.body.expression), `${args.action} 脚本语法错误`)
+  }
+})
+
+check('open 默认不复用标签页，reuseTab:true 才透传', () => {
+  const plain = buildCall({ action: 'open', url: 'https://e.com' }, opts)
+  assert.equal(plain.body.reuseTab, undefined, 'open 默认必须新开标签页')
+  const reuse = buildCall({ action: 'open', url: 'https://e.com', reuseTab: true }, opts)
+  assert.equal(reuse.body.reuseTab, true)
+})
+
+check('新增动作缺 tabId 也会提前报错', () => {
+  for (const action of ['drag', 'challenge', 'dialog', 'video', 'capture_element', 'puzzle_gap']) {
+    assert.throws(() => buildCall({ action }, opts), /需要 tabId/, `${action} 应报错`)
+  }
+})
+
+check('drag 支持 overshootBounds（控件级过冲钳制）', () => {
+  const call = buildCall({
+    action: 'drag', tabId: 't1', handle: 'e12', deltaX: 266,
+    overshootBounds: { x: 320, y: 480, width: 300, height: 40 },
+  }, opts)
+  assert.deepEqual(call.body.overshootBounds, { x: 320, y: 480, width: 300, height: 40 })
+  assert.throws(() => buildCall({
+    action: 'drag', tabId: 't1', handle: 'e1', deltaX: 10,
+    overshootBounds: { width: 0, height: 10 },
+  }, opts), /overshootBounds/)
+})
+
+check('challenge/puzzle_gap 的建议拖拽指令自带 overshootBounds', () => {
+  const challenge = shapeResult('challenge', {
+    tabId: 't1', count: 1, dialogPolicy: 'dismiss',
+    challenges: [{
+      kind: 'slider', selector: '.s',
+      box: { x: 320, y: 480, width: 300, height: 40 },
+      suggestedDrag: { start: { x: 340, y: 500 }, deltaX: 260 },
+    }],
+  }, opts)
+  assert.match(challenge, /overshootBounds=\{x:320,y:480,width:300,height:40\}/)
+
+  const gap = shapeResult('puzzle_gap', {
+    ok: true, deltaX: 180, confidence: 0.9,
+    bgBox: { x: 10, y: 20, width: 300, height: 150 },
+    suggestedDrag: {
+      handle: '#btn', start: { x: 50, y: 100 }, deltaX: 180,
+      easing: 'easeInOut', jitterPx: 2, overshootPx: 6, durationMs: 850,
+    },
+  }, opts)
+  assert.match(gap, /overshootBounds=\{x:10,y:20,width:300,height:150\}/)
+})
+
+check('dialog 结果显示域名覆盖计数与上限', () => {
+  const out = shapeResult('dialog', {
+    dialogPolicy: 'dismiss',
+    supportedPolicies: ['dismiss', 'accept', 'auto'],
+    domainPolicyCount: 3,
+    domainPolicyLimit: 32,
+    dialogPolicyByDomain: { 'a.example.com': 'accept' },
+    lastDialog: null,
+  }, opts)
+  assert.match(out, /按域名覆盖（3\/32）/)
+})
+
 console.log(`\n${passed} 项通过`)
